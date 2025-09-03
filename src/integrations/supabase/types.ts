@@ -14,7 +14,87 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      conversations: {
+        Row: {
+          bot_response: string
+          client_message: string
+          created_at: string
+          id: string
+          message_type: string | null
+          user_id: string
+        }
+        Insert: {
+          bot_response: string
+          client_message: string
+          created_at?: string
+          id?: string
+          message_type?: string | null
+          user_id: string
+        }
+        Update: {
+          bot_response?: string
+          client_message?: string
+          created_at?: string
+          id?: string
+          message_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      message_templates: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          template_content: string
+          title: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          template_content: string
+          title: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          template_content?: string
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          fiverr_username: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          fiverr_username?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          fiverr_username?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

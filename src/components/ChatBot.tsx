@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Send, Sparkles, MessageCircle, FileText } from "lucide-react";
+import { Copy, Send, Sparkles, MessageCircle, FileText, History } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface ChatMessage {
   id: string;
@@ -13,12 +15,81 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+interface DatabaseConversation {
+  id: string;
+  client_message: string;
+  bot_response: string;
+  message_type: string;
+  created_at: string;
+}
+
 const FiverrChatBot = () => {
   const [clientMessage, setClientMessage] = useState("");
   const [generatedResponse, setGeneratedResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [conversations, setConversations] = useState<ChatMessage[]>([]);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Load conversation history on component mount
+  useEffect(() => {
+    if (user) {
+      loadConversationHistory();
+    }
+  }, [user]);
+
+  const loadConversationHistory = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Error loading conversation history:', error);
+        return;
+      }
+
+      const formattedHistory: ChatMessage[] = data.map((conv: DatabaseConversation) => ({
+        id: conv.id,
+        clientMessage: conv.client_message,
+        generatedResponse: conv.bot_response,
+        timestamp: new Date(conv.created_at),
+      }));
+
+      setConversations(formattedHistory);
+    } catch (error) {
+      console.error('Error loading conversation history:', error);
+    }
+  };
+
+  const saveConversationToDb = async (clientMsg: string, botResp: string, msgType: string) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('conversations')
+        .insert({
+          user_id: user.id,
+          client_message: clientMsg,
+          bot_response: botResp,
+          message_type: msgType,
+        });
+
+      if (error) {
+        console.error('Error saving conversation:', error);
+      } else {
+        // Reload conversation history
+        loadConversationHistory();
+      }
+    } catch (error) {
+      console.error('Error saving conversation:', error);
+    }
+  };
 
   const responseTemplates = {
     greeting: "Thank you for reaching out! I'm excited to help you with your project. Could you please provide more details about what you're looking for?",
@@ -67,7 +138,7 @@ const FiverrChatBot = () => {
     });
   };
 
-  const saveConversation = () => {
+  const saveConversation = async () => {
     if (clientMessage && generatedResponse) {
       const newConversation: ChatMessage = {
         id: Date.now().toString(),
@@ -77,6 +148,10 @@ const FiverrChatBot = () => {
       };
       
       setConversations([newConversation, ...conversations]);
+      
+      // Save to database
+      await saveConversationToDb(clientMessage, generatedResponse, 'custom_offer');
+      
       setClientMessage("");
       setGeneratedResponse("");
       
@@ -104,7 +179,9 @@ const FiverrChatBot = () => {
         </div>
 
         {/* Main Interface */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid lg:grid-cols-3 gap-6 mb-8">
+          {/* Left Column - Input and Templates */}
+          <div className="lg:col-span-2 space-y-6">
           {/* Input Panel */}
           <Card className="shadow-soft transition-all duration-300 hover:shadow-elegant">
             <CardHeader>
@@ -198,52 +275,64 @@ const FiverrChatBot = () => {
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Conversation History */}
-        {conversations.length > 0 && (
-          <Card className="shadow-soft">
-            <CardHeader>
-              <CardTitle>Recent Conversations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4 max-h-[400px] overflow-y-auto">
-                {conversations.map((conversation) => (
-                  <div key={conversation.id} className="border rounded-lg p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Badge variant="outline" className="text-xs">
-                        {conversation.timestamp.toLocaleString()}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => copyToClipboard(conversation.generatedResponse)}
-                      >
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    
-                    <div className="grid gap-3">
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Client:</p>
-                        <p className="text-sm bg-muted p-2 rounded text-muted-foreground">
-                          {conversation.clientMessage.substring(0, 100)}...
-                        </p>
+          </div>
+          
+          {/* Right Column - Conversation History Sidebar */}
+          <div className="space-y-6">
+            <Card className="shadow-soft">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  Recent Conversations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {conversations.length > 0 ? (
+                  <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                    {conversations.map((conversation) => (
+                      <div key={conversation.id} className="border rounded-lg p-3 space-y-2 hover:bg-muted/30 transition-colors">
+                        <div className="flex items-center justify-between">
+                          <Badge variant="outline" className="text-xs">
+                            {conversation.timestamp.toLocaleDateString()}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => copyToClipboard(conversation.generatedResponse)}
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Client:</p>
+                            <p className="text-xs bg-muted p-2 rounded text-muted-foreground line-clamp-2">
+                              {conversation.clientMessage}
+                            </p>
+                          </div>
+                          
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Response:</p>
+                            <p className="text-xs bg-primary/5 p-2 rounded line-clamp-3">
+                              {conversation.generatedResponse}
+                            </p>
+                          </div>
+                        </div>
                       </div>
-                      
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-1">Response:</p>
-                        <p className="text-sm bg-primary/5 p-2 rounded">
-                          {conversation.generatedResponse.substring(0, 150)}...
-                        </p>
-                      </div>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No conversations yet</p>
+                    <p className="text-xs mt-1">Your chat history will appear here</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
       </div>
     </div>
   );
