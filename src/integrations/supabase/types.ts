@@ -21,6 +21,7 @@ export type Database = {
           created_at: string
           id: string
           message_type: string | null
+          screenshot_url: string | null
           user_id: string
         }
         Insert: {
@@ -29,6 +30,7 @@ export type Database = {
           created_at?: string
           id?: string
           message_type?: string | null
+          screenshot_url?: string | null
           user_id: string
         }
         Update: {
@@ -37,6 +39,7 @@ export type Database = {
           created_at?: string
           id?: string
           message_type?: string | null
+          screenshot_url?: string | null
           user_id?: string
         }
         Relationships: []

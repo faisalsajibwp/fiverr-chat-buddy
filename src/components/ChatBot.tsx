@@ -3,16 +3,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Send, Sparkles, MessageCircle, FileText, History } from "lucide-react";
+import { Copy, Send, Sparkles, MessageCircle, FileText, History, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { TemplateManager } from './TemplateManager';
+import { ScreenshotUpload } from './ScreenshotUpload';
 
 interface ChatMessage {
   id: string;
   clientMessage: string;
   generatedResponse: string;
   timestamp: Date;
+  screenshotUrl?: string;
 }
 
 interface DatabaseConversation {
@@ -21,6 +24,7 @@ interface DatabaseConversation {
   bot_response: string;
   message_type: string;
   created_at: string;
+  screenshot_url?: string;
 }
 
 const FiverrChatBot = () => {
@@ -28,6 +32,9 @@ const FiverrChatBot = () => {
   const [generatedResponse, setGeneratedResponse] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [conversations, setConversations] = useState<ChatMessage[]>([]);
+  const [screenshotUrl, setScreenshotUrl] = useState<string>("");
+  const [messageType, setMessageType] = useState("custom_offer");
+  const [showTemplates, setShowTemplates] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -59,6 +66,7 @@ const FiverrChatBot = () => {
         clientMessage: conv.client_message,
         generatedResponse: conv.bot_response,
         timestamp: new Date(conv.created_at),
+        screenshotUrl: conv.screenshot_url,
       }));
 
       setConversations(formattedHistory);
@@ -67,7 +75,7 @@ const FiverrChatBot = () => {
     }
   };
 
-  const saveConversationToDb = async (clientMsg: string, botResp: string, msgType: string) => {
+  const saveConversationToDb = async (clientMsg: string, botResp: string, msgType: string, screenshotUrl?: string) => {
     if (!user) return;
 
     try {
@@ -78,6 +86,7 @@ const FiverrChatBot = () => {
           client_message: clientMsg,
           bot_response: botResp,
           message_type: msgType,
+          screenshot_url: screenshotUrl,
         });
 
       if (error) {
@@ -99,35 +108,56 @@ const FiverrChatBot = () => {
     timeline: "I appreciate your patience with the timeline. I want to ensure I deliver the highest quality work for you. I'll have this completed by [specific date] and will keep you updated on the progress."
   };
 
-  const generateResponse = (template?: string) => {
+  const generateResponse = async (template?: string) => {
+    if (!clientMessage.trim()) {
+      toast({
+        title: "Missing message",
+        description: "Please enter a client message first.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsGenerating(true);
     
-    // Simulate AI response generation
-    setTimeout(() => {
-      let response = "";
-      
+    try {
       if (template) {
-        response = responseTemplates[template as keyof typeof responseTemplates];
+        // Use template response
+        const response = responseTemplates[template as keyof typeof responseTemplates];
+        setGeneratedResponse(response);
       } else {
-        // Basic response generation based on client message
-        const message = clientMessage.toLowerCase();
-        
-        if (message.includes("hello") || message.includes("hi") || message.includes("hey")) {
-          response = responseTemplates.greeting;
-        } else if (message.includes("price") || message.includes("cost") || message.includes("quote")) {
-          response = responseTemplates.customOffer;
-        } else if (message.includes("change") || message.includes("revision") || message.includes("modify")) {
-          response = responseTemplates.revision;
-        } else if (message.includes("when") || message.includes("timeline") || message.includes("deadline")) {
-          response = responseTemplates.timeline;
-        } else {
-          response = "Thank you for your message! I understand your requirements and I'm here to help. Let me know if you need any clarification or have additional questions about the project.";
+        // Call Gemini API via edge function
+        const { data, error } = await supabase.functions.invoke('gemini-chat', {
+          body: {
+            clientMessage,
+            messageType,
+            screenshotUrl: screenshotUrl || null,
+            userContext: {
+              timestamp: new Date().toISOString()
+            }
+          }
+        });
+
+        if (error) {
+          console.error('Error calling Gemini API:', error);
+          throw error;
         }
+
+        setGeneratedResponse(data.generatedResponse || data.fallback);
       }
+    } catch (error) {
+      console.error('Error generating response:', error);
+      toast({
+        title: "Generation failed",
+        description: "Failed to generate response. Using fallback.",
+        variant: "destructive"
+      });
       
-      setGeneratedResponse(response);
+      // Fallback response
+      setGeneratedResponse("Thank you for your message! I understand your requirements and I'm here to help. Let me review the details and get back to you with a comprehensive response shortly.");
+    } finally {
       setIsGenerating(false);
-    }, 1500);
+    }
   };
 
   const copyToClipboard = (text: string) => {
@@ -145,21 +175,39 @@ const FiverrChatBot = () => {
         clientMessage,
         generatedResponse,
         timestamp: new Date(),
+        screenshotUrl,
       };
       
       setConversations([newConversation, ...conversations]);
       
       // Save to database
-      await saveConversationToDb(clientMessage, generatedResponse, 'custom_offer');
+      await saveConversationToDb(clientMessage, generatedResponse, messageType, screenshotUrl);
       
       setClientMessage("");
       setGeneratedResponse("");
+      setScreenshotUrl("");
       
       toast({
         title: "Conversation saved",
         description: "Added to your conversation history.",
       });
     }
+  };
+
+  const useTemplate = (content: string) => {
+    setGeneratedResponse(content);
+    toast({
+      title: "Template applied",
+      description: "Template content has been loaded.",
+    });
+  };
+
+  const handleScreenshotUploaded = (url: string) => {
+    setScreenshotUrl(url);
+  };
+
+  const removeScreenshot = () => {
+    setScreenshotUrl("");
   };
 
   return (
@@ -182,6 +230,39 @@ const FiverrChatBot = () => {
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
           {/* Left Column - Input and Templates */}
           <div className="lg:col-span-2 space-y-6">
+          
+          {/* Message Type and Screenshot Upload */}
+          <div className="grid md:grid-cols-2 gap-4">
+            <Card className="shadow-soft">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Message Type
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <select 
+                  className="w-full p-2 border rounded-md"
+                  value={messageType}
+                  onChange={(e) => setMessageType(e.target.value)}
+                >
+                  <option value="greeting">Greeting</option>
+                  <option value="custom_offer">Custom Offer</option>
+                  <option value="revision">Revision Request</option>
+                  <option value="delivery">Delivery</option>
+                  <option value="timeline">Timeline Discussion</option>
+                  <option value="pricing">Pricing Question</option>
+                  <option value="question">General Question</option>
+                </select>
+              </CardContent>
+            </Card>
+            
+            <ScreenshotUpload 
+              onScreenshotUploaded={handleScreenshotUploaded}
+              currentScreenshot={screenshotUrl}
+              onRemoveScreenshot={removeScreenshot}
+            />
+          </div>
           {/* Input Panel */}
           <Card className="shadow-soft transition-all duration-300 hover:shadow-elegant">
             <CardHeader>
@@ -277,8 +358,32 @@ const FiverrChatBot = () => {
           </Card>
           </div>
           
-          {/* Right Column - Conversation History Sidebar */}
+          {/* Right Column - Templates and History */}
           <div className="space-y-6">
+            {/* Template Management Toggle */}
+            <Card className="shadow-soft">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="h-5 w-5" />
+                    Tools
+                  </CardTitle>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowTemplates(!showTemplates)}
+                  >
+                    {showTemplates ? "Hide" : "Show"} Templates
+                  </Button>
+                </div>
+              </CardHeader>
+            </Card>
+
+            {/* Template Manager */}
+            {showTemplates && (
+              <TemplateManager onUseTemplate={useTemplate} />
+            )}
+            
             <Card className="shadow-soft">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -304,21 +409,32 @@ const FiverrChatBot = () => {
                           </Button>
                         </div>
                         
-                        <div className="space-y-2">
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-1">Client:</p>
-                            <p className="text-xs bg-muted p-2 rounded text-muted-foreground line-clamp-2">
-                              {conversation.clientMessage}
-                            </p>
-                          </div>
-                          
-                          <div>
-                            <p className="text-xs font-medium text-muted-foreground mb-1">Response:</p>
-                            <p className="text-xs bg-primary/5 p-2 rounded line-clamp-3">
-                              {conversation.generatedResponse}
-                            </p>
-                          </div>
-                        </div>
+                         <div className="space-y-2">
+                           {conversation.screenshotUrl && (
+                             <div>
+                               <p className="text-xs font-medium text-muted-foreground mb-1">Screenshot:</p>
+                               <img 
+                                 src={conversation.screenshotUrl} 
+                                 alt="Conversation screenshot" 
+                                 className="w-full h-16 object-cover rounded border"
+                               />
+                             </div>
+                           )}
+                           
+                           <div>
+                             <p className="text-xs font-medium text-muted-foreground mb-1">Client:</p>
+                             <p className="text-xs bg-muted p-2 rounded text-muted-foreground line-clamp-2">
+                               {conversation.clientMessage}
+                             </p>
+                           </div>
+                           
+                           <div>
+                             <p className="text-xs font-medium text-muted-foreground mb-1">Response:</p>
+                             <p className="text-xs bg-primary/5 p-2 rounded line-clamp-3">
+                               {conversation.generatedResponse}
+                             </p>
+                           </div>
+                         </div>
                       </div>
                     ))}
                   </div>
