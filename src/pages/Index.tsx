@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import FiverrChatBot from "@/components/ChatBot";
 import { Button } from '@/components/ui/button';
+import { ProfileSettings } from '@/components/ProfileSettings';
 import { LogOut, User } from 'lucide-react';
 
 const Index = () => {
@@ -34,6 +35,7 @@ const Index = () => {
           <User className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium text-foreground">{user.email}</span>
         </div>
+        <ProfileSettings />
         <Button 
           variant="outline" 
           size="sm" 

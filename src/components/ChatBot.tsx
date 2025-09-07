@@ -9,6 +9,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { TemplateManager } from './TemplateManager';
 import { ScreenshotUpload } from './ScreenshotUpload';
+import { ConversationAnalytics } from './ConversationAnalytics';
+import { ConversationSearch } from './ConversationSearch';
+import { ExportData } from './ExportData';
 
 interface ChatMessage {
   id: string;
@@ -35,6 +38,9 @@ const FiverrChatBot = () => {
   const [screenshotUrl, setScreenshotUrl] = useState<string>("");
   const [messageType, setMessageType] = useState("custom_offer");
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [showExport, setShowExport] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -360,28 +366,70 @@ const FiverrChatBot = () => {
           
           {/* Right Column - Templates and History */}
           <div className="space-y-6">
-            {/* Template Management Toggle */}
+            {/* Tools Control Panel */}
             <Card className="shadow-soft">
               <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Settings className="h-5 w-5" />
-                    Tools
-                  </CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Tools & Analytics
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
                   <Button
-                    variant="outline"
+                    variant={showTemplates ? "default" : "outline"}
                     size="sm"
                     onClick={() => setShowTemplates(!showTemplates)}
+                    className="text-xs"
                   >
-                    {showTemplates ? "Hide" : "Show"} Templates
+                    Templates
+                  </Button>
+                  <Button
+                    variant={showSearch ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowSearch(!showSearch)}
+                    className="text-xs"
+                  >
+                    Search
+                  </Button>
+                  <Button
+                    variant={showAnalytics ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowAnalytics(!showAnalytics)}
+                    className="text-xs"
+                  >
+                    Analytics
+                  </Button>
+                  <Button
+                    variant={showExport ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setShowExport(!showExport)}
+                    className="text-xs"
+                  >
+                    Export
                   </Button>
                 </div>
-              </CardHeader>
+              </CardContent>
             </Card>
 
             {/* Template Manager */}
             {showTemplates && (
               <TemplateManager onUseTemplate={useTemplate} />
+            )}
+
+            {/* Conversation Search */}
+            {showSearch && (
+              <ConversationSearch onUseResponse={useTemplate} />
+            )}
+
+            {/* Analytics Dashboard */}
+            {showAnalytics && (
+              <ConversationAnalytics />
+            )}
+
+            {/* Export Data */}
+            {showExport && (
+              <ExportData />
             )}
             
             <Card className="shadow-soft">
