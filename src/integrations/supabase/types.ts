@@ -44,29 +44,110 @@ export type Database = {
         }
         Relationships: []
       }
+      curated_templates: {
+        Row: {
+          category: string
+          client_type: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          industry_tags: string[] | null
+          is_active: boolean | null
+          matching_keywords: string[] | null
+          project_complexity: string | null
+          template_content: string
+          template_variables: Json | null
+          title: string
+          tone_style: string
+          usage_description: string | null
+        }
+        Insert: {
+          category: string
+          client_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          industry_tags?: string[] | null
+          is_active?: boolean | null
+          matching_keywords?: string[] | null
+          project_complexity?: string | null
+          template_content: string
+          template_variables?: Json | null
+          title: string
+          tone_style: string
+          usage_description?: string | null
+        }
+        Update: {
+          category?: string
+          client_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          industry_tags?: string[] | null
+          is_active?: boolean | null
+          matching_keywords?: string[] | null
+          project_complexity?: string | null
+          template_content?: string
+          template_variables?: Json | null
+          title?: string
+          tone_style?: string
+          usage_description?: string | null
+        }
+        Relationships: []
+      }
       message_templates: {
         Row: {
           category: string | null
+          client_type: string | null
           created_at: string
           id: string
+          industry_tags: string[] | null
+          is_ai_generated: boolean | null
+          last_used_at: string | null
+          matching_keywords: string[] | null
+          project_complexity: string | null
+          success_rating: number | null
           template_content: string
+          template_variables: Json | null
           title: string
+          tone_style: string | null
+          usage_count: number | null
           user_id: string
         }
         Insert: {
           category?: string | null
+          client_type?: string | null
           created_at?: string
           id?: string
+          industry_tags?: string[] | null
+          is_ai_generated?: boolean | null
+          last_used_at?: string | null
+          matching_keywords?: string[] | null
+          project_complexity?: string | null
+          success_rating?: number | null
           template_content: string
+          template_variables?: Json | null
           title: string
+          tone_style?: string | null
+          usage_count?: number | null
           user_id: string
         }
         Update: {
           category?: string | null
+          client_type?: string | null
           created_at?: string
           id?: string
+          industry_tags?: string[] | null
+          is_ai_generated?: boolean | null
+          last_used_at?: string | null
+          matching_keywords?: string[] | null
+          project_complexity?: string | null
+          success_rating?: number | null
           template_content?: string
+          template_variables?: Json | null
           title?: string
+          tone_style?: string | null
+          usage_count?: number | null
           user_id?: string
         }
         Relationships: []
@@ -98,12 +179,106 @@ export type Database = {
         }
         Relationships: []
       }
+      template_analytics: {
+        Row: {
+          client_message_context: string | null
+          client_response_time: unknown | null
+          conversion_outcome: string | null
+          created_at: string
+          id: string
+          response_effectiveness: number | null
+          template_id: string
+          used_at: string
+          user_id: string
+        }
+        Insert: {
+          client_message_context?: string | null
+          client_response_time?: unknown | null
+          conversion_outcome?: string | null
+          created_at?: string
+          id?: string
+          response_effectiveness?: number | null
+          template_id: string
+          used_at?: string
+          user_id: string
+        }
+        Update: {
+          client_message_context?: string | null
+          client_response_time?: unknown | null
+          conversion_outcome?: string | null
+          created_at?: string
+          id?: string
+          response_effectiveness?: number | null
+          template_id?: string
+          used_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "template_analytics_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "message_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      template_upload_sessions: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_log: Json | null
+          failed_templates: number | null
+          id: string
+          original_filename: string | null
+          processed_templates: number | null
+          status: string | null
+          total_templates: number | null
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_log?: Json | null
+          failed_templates?: number | null
+          id?: string
+          original_filename?: string | null
+          processed_templates?: number | null
+          status?: string | null
+          total_templates?: number | null
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_log?: Json | null
+          failed_templates?: number | null
+          id?: string
+          original_filename?: string | null
+          processed_templates?: number | null
+          status?: string | null
+          total_templates?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      calculate_template_match_score: {
+        Args: {
+          client_message: string
+          message_context?: Json
+          template_id: string
+        }
+        Returns: number
+      }
+      update_template_usage: {
+        Args: { template_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
