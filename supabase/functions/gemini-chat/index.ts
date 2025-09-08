@@ -40,9 +40,9 @@ serve(async (req) => {
       throw new Error('Invalid user token');
     }
 
-    // Get user's message templates and conversation history for context
+    // Get user's templates and conversation history for enhanced AI matching
     const [templatesRes, conversationsRes, profileRes] = await Promise.all([
-      supabase.from('message_templates').select('*').eq('user_id', user.id),
+      supabase.from('message_templates').select('*').eq('user_id', user.id).order('usage_count', { ascending: false }),
       supabase.from('conversations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
       supabase.from('profiles').select('*').eq('user_id', user.id).single()
     ]);
@@ -50,6 +50,27 @@ serve(async (req) => {
     const templates = templatesRes.data || [];
     const recentConversations = conversationsRes.data || [];
     const profile = profileRes.data;
+
+    // Find best matching templates using AI scoring
+    const templateMatches = await Promise.all(
+      templates.slice(0, 5).map(async (template) => {
+        try {
+          const { data: score } = await supabase.rpc('calculate_template_match_score', {
+            template_id: template.id,
+            client_message: clientMessage,
+            message_context: { message_type: messageType, client_type: userContext.client_type }
+          });
+          return { template, score: score || 0 };
+        } catch (error) {
+          return { template, score: 0 };
+        }
+      })
+    );
+
+    const bestMatches = templateMatches
+      .filter(match => match.score > 0.3)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 3);
 
     // Build context-aware prompt
     const systemPrompt = `You are a professional Fiverr assistant helping to craft responses to client messages. 
