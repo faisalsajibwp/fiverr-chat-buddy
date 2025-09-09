@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Copy, Send, Sparkles, MessageCircle, FileText, History, Settings } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -320,7 +322,11 @@ const FiverrChatBot = () => {
             <CardContent className="space-y-4">
               <div className="min-h-[200px] p-4 bg-muted rounded-lg border-2 border-dashed border-border">
                 {generatedResponse ? (
-                  <p className="text-foreground leading-relaxed">{generatedResponse}</p>
+                  <div className="text-foreground leading-relaxed prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-code:text-foreground prose-pre:bg-background prose-pre:text-foreground">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {generatedResponse}
+                    </ReactMarkdown>
+                  </div>
                 ) : (
                   <p className="text-muted-foreground italic">
                     {isGenerating ? "Generating professional response..." : "Your generated response will appear here"}
@@ -476,12 +482,14 @@ const FiverrChatBot = () => {
                              </p>
                            </div>
                            
-                           <div>
-                             <p className="text-xs font-medium text-muted-foreground mb-1">Response:</p>
-                             <p className="text-xs bg-primary/5 p-2 rounded line-clamp-3">
-                               {conversation.generatedResponse}
-                             </p>
-                           </div>
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-1">Response:</p>
+                              <div className="text-xs bg-primary/5 p-2 rounded line-clamp-3 prose prose-xs max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                  {conversation.generatedResponse}
+                                </ReactMarkdown>
+                              </div>
+                            </div>
                          </div>
                       </div>
                     ))}
