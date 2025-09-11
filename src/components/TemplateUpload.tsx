@@ -142,39 +142,128 @@ export const TemplateUpload = ({ onUploadComplete }: TemplateUploadProps) => {
     })).filter(template => template.title && template.content);
   };
 
-  const analyzeTemplateContent = (content: string): { keywords: string[], category: string, tone: string } => {
+  const formatTemplateContent = (content: string): string => {
+    // Auto-format content for consistency
+    let formatted = content.trim();
+    
+    // Normalize line breaks
+    formatted = formatted.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    
+    // Remove excessive whitespace
+    formatted = formatted.replace(/\n{3,}/g, '\n\n');
+    formatted = formatted.replace(/[ \t]+/g, ' ');
+    
+    // Capitalize first letter of sentences
+    formatted = formatted.replace(/(^|[.!?]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
+    
+    // Fix common spacing issues
+    formatted = formatted.replace(/\s+([.,!?])/g, '$1');
+    formatted = formatted.replace(/([.!?])([A-Z])/g, '$1 $2');
+    
+    // Ensure proper greeting format
+    if (formatted.toLowerCase().startsWith('hi ') || formatted.toLowerCase().startsWith('hello ')) {
+      formatted = formatted.replace(/^(hi|hello)\s*/i, (match) => match.charAt(0).toUpperCase() + match.slice(1).toLowerCase());
+    }
+    
+    return formatted;
+  };
+
+  const analyzeTemplateContent = (content: string): { keywords: string[], category: string, tone: string, complexity: string, clientType: string } => {
     const lowerContent = content.toLowerCase();
     
-    // Keyword extraction (simple approach)
-    const commonWords = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'];
+    // Enhanced keyword extraction
+    const commonWords = ['the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'a', 'an', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'must', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'your', 'our', 'their'];
     const words = content.match(/\b\w+\b/g) || [];
     const significantWords = words
       .filter(word => word.length > 3 && !commonWords.includes(word.toLowerCase()))
-      .slice(0, 10);
+      .map(word => word.toLowerCase())
+      .filter((word, index, arr) => arr.indexOf(word) === index) // Remove duplicates
+      .slice(0, 12);
     
-    // Category detection
-    let category = 'custom';
-    if (lowerContent.includes('welcome') || lowerContent.includes('hello') || lowerContent.includes('thank you for choosing')) {
-      category = 'client_onboarding';
-    } else if (lowerContent.includes('offer') || lowerContent.includes('proposal') || lowerContent.includes('price') || lowerContent.includes('investment')) {
-      category = 'custom_offer';
-    } else if (lowerContent.includes('revision') || lowerContent.includes('feedback') || lowerContent.includes('changes')) {
-      category = 'revision_handling';
-    } else if (lowerContent.includes('delivery') || lowerContent.includes('completed') || lowerContent.includes('final')) {
-      category = 'delivery';
+    // Enhanced category detection with scoring
+    const categoryScores = {
+      'client_onboarding': 0,
+      'custom_offer': 0,
+      'revision_handling': 0,
+      'delivery': 0,
+      'follow_up': 0,
+      'upselling': 0,
+      'requirements_gathering': 0
+    };
+    
+    // Onboarding indicators
+    if (/(welcome|hello|thank you for choosing|excited to work|get started|onboard)/i.test(content)) {
+      categoryScores.client_onboarding += 3;
     }
     
-    // Tone detection
+    // Custom offer indicators
+    if (/(proposal|custom offer|price|investment|budget|quote|estimate)/i.test(content)) {
+      categoryScores.custom_offer += 3;
+    }
+    
+    // Revision handling indicators
+    if (/(revision|feedback|changes|modify|update|adjust)/i.test(content)) {
+      categoryScores.revision_handling += 3;
+    }
+    
+    // Delivery indicators
+    if (/(delivery|completed|final|finished|ready|done)/i.test(content)) {
+      categoryScores.delivery += 3;
+    }
+    
+    // Follow-up indicators
+    if (/(follow up|check in|progress|status|update)/i.test(content)) {
+      categoryScores.follow_up += 2;
+    }
+    
+    // Upselling indicators
+    if (/(additional|upgrade|premium|extra|more|enhance)/i.test(content)) {
+      categoryScores.upselling += 2;
+    }
+    
+    // Requirements gathering indicators
+    if (/(requirements|clarify|understand|details|specific|information)/i.test(content)) {
+      categoryScores.requirements_gathering += 2;
+    }
+    
+    const category = Object.entries(categoryScores)
+      .sort(([,a], [,b]) => b - a)[0][0] || 'custom';
+    
+    // Enhanced tone detection with multiple indicators
     let tone = 'professional';
-    if (lowerContent.includes('excited') || lowerContent.includes('amazing') || lowerContent.includes('!')) {
-      tone = 'warm';
-    } else if (lowerContent.includes('strategic') || lowerContent.includes('analysis') || lowerContent.includes('recommend')) {
-      tone = 'consultative';
-    } else if (lowerContent.includes('quickly') || lowerContent.includes('efficient') || lowerContent.includes('ready')) {
-      tone = 'efficient';
+    const warmIndicators = /(excited|amazing|wonderful|fantastic|love|passion|!{2,})/i;
+    const consultativeIndicators = /(strategic|analysis|recommend|suggest|best practice|optimize)/i;
+    const efficientIndicators = /(quickly|efficient|fast|immediate|asap|urgent)/i;
+    const formalIndicators = /(sincerely|respectfully|formal|official|regards)/i;
+    const collaborativeIndicators = /(together|collaborate|partnership|team|work with)/i;
+    
+    if (warmIndicators.test(content)) tone = 'warm';
+    else if (consultativeIndicators.test(content)) tone = 'consultative';
+    else if (efficientIndicators.test(content)) tone = 'efficient';
+    else if (formalIndicators.test(content)) tone = 'formal';
+    else if (collaborativeIndicators.test(content)) tone = 'collaborative';
+    
+    // Project complexity detection
+    let complexity = 'standard';
+    if (/(complex|advanced|enterprise|large scale|sophisticated)/i.test(content)) {
+      complexity = 'complex';
+    } else if (/(simple|basic|quick|small|minor)/i.test(content)) {
+      complexity = 'simple';
     }
     
-    return { keywords: significantWords, category, tone };
+    // Client type detection
+    let clientType = 'business';
+    if (/(startup|new business|entrepreneur)/i.test(content)) {
+      clientType = 'startup';
+    } else if (/(enterprise|corporation|large company)/i.test(content)) {
+      clientType = 'enterprise';
+    } else if (/(individual|personal|freelancer)/i.test(content)) {
+      clientType = 'individual';
+    } else if (/(agency|marketing|design)/i.test(content)) {
+      clientType = 'agency';
+    }
+    
+    return { keywords: significantWords, category, tone, complexity, clientType };
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -205,15 +294,29 @@ export const TemplateUpload = ({ onUploadComplete }: TemplateUploadProps) => {
       } else if (fileExtension === 'json') {
         templates = parseJSONContent(fileContent);
       } else if (fileExtension === 'txt') {
-        // For TXT files, treat each paragraph as a template
+        // For TXT files, treat each paragraph as a template with smart formatting
         const paragraphs = fileContent.split('\n\n').filter(p => p.trim());
         templates = paragraphs.map((content, index) => {
-          const analysis = analyzeTemplateContent(content);
+          const formattedContent = formatTemplateContent(content);
+          const analysis = analyzeTemplateContent(formattedContent);
+          
+          // Generate smarter titles based on content
+          let smartTitle = `Template ${index + 1}`;
+          const firstLine = formattedContent.split('\n')[0].substring(0, 50);
+          if (firstLine.length > 10) {
+            smartTitle = firstLine.replace(/[^\w\s]/g, '').trim();
+            if (smartTitle.length > 40) {
+              smartTitle = smartTitle.substring(0, 37) + '...';
+            }
+          }
+          
           return {
-            title: `Imported Template ${index + 1}`,
-            content: content.trim(),
+            title: smartTitle,
+            content: formattedContent,
             category: analysis.category,
             tone_style: analysis.tone,
+            project_complexity: analysis.complexity,
+            client_type: analysis.clientType,
             matching_keywords: analysis.keywords
           };
         });
@@ -247,17 +350,20 @@ export const TemplateUpload = ({ onUploadComplete }: TemplateUploadProps) => {
         
         for (const template of batch) {
           try {
-            // Enhanced template with AI analysis
+            // Enhanced template with AI analysis and auto-formatting
+            const formattedContent = formatTemplateContent(template.content);
+            const analysis = analyzeTemplateContent(formattedContent);
+            
             const enhancedTemplate = {
               user_id: user.id,
               title: template.title,
-              template_content: template.content,
-              category: template.category,
-              tone_style: template.tone_style || 'professional',
+              template_content: formattedContent,
+              category: template.category || analysis.category,
+              tone_style: template.tone_style || analysis.tone,
               industry_tags: template.industry_tags || [],
-              client_type: template.client_type,
-              project_complexity: template.project_complexity || 'standard',
-              matching_keywords: template.matching_keywords || [],
+              client_type: template.client_type || analysis.clientType,
+              project_complexity: template.project_complexity || analysis.complexity,
+              matching_keywords: template.matching_keywords || analysis.keywords,
               is_ai_generated: false
             };
 
