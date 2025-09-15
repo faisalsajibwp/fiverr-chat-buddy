@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Send, Sparkles, MessageCircle, FileText, History, Settings } from "lucide-react";
+import { Copy, Send, Sparkles, MessageCircle, FileText, History, Settings, Edit, Save } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useToast } from "@/hooks/use-toast";
@@ -43,6 +43,8 @@ const FiverrChatBot = () => {
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedResponse, setEditedResponse] = useState("");
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -202,6 +204,51 @@ const FiverrChatBot = () => {
     }
   };
 
+  const saveRefinedResponse = async () => {
+    if (!clientMessage || !generatedResponse || !editedResponse) return;
+
+    try {
+      const { error } = await supabase
+        .from('refined_responses')
+        .insert({
+          user_id: user?.id,
+          original_client_message: clientMessage,
+          original_response: generatedResponse,
+          refined_response: editedResponse,
+          message_type: messageType,
+          similarity_keywords: clientMessage.toLowerCase().split(' ').filter(word => word.length > 3)
+        });
+
+      if (error) throw error;
+
+      setGeneratedResponse(editedResponse);
+      setIsEditing(false);
+      setEditedResponse("");
+
+      toast({
+        title: "Response refined and saved",
+        description: "Your refined response will be used as reference for similar future queries.",
+      });
+    } catch (error) {
+      console.error('Error saving refined response:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save refined response.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const startEditing = () => {
+    setEditedResponse(generatedResponse);
+    setIsEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setIsEditing(false);
+    setEditedResponse("");
+  };
+
   const useTemplate = (content: string) => {
     setGeneratedResponse(content);
     toast({
@@ -317,11 +364,19 @@ const FiverrChatBot = () => {
               <CardTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5" />
                 Generated Response
+                {isEditing && <Badge variant="secondary" className="ml-2">Editing</Badge>}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="min-h-[200px] p-4 bg-muted rounded-lg border-2 border-dashed border-border">
-                {generatedResponse ? (
+                {isEditing ? (
+                  <Textarea
+                    value={editedResponse}
+                    onChange={(e) => setEditedResponse(e.target.value)}
+                    className="min-h-[200px] resize-none border-0 bg-transparent p-0 focus-visible:ring-0"
+                    placeholder="Edit and refine your response..."
+                  />
+                ) : generatedResponse ? (
                   <div className="text-foreground leading-relaxed prose prose-sm max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-ul:text-foreground prose-ol:text-foreground prose-li:text-foreground prose-code:text-foreground prose-pre:bg-background prose-pre:text-foreground">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {generatedResponse}
@@ -337,35 +392,64 @@ const FiverrChatBot = () => {
               <div className="flex flex-wrap gap-2">
                 <Badge variant="default" className="text-xs">Fiverr Policy Compliant</Badge>
                 <Badge variant="outline" className="text-xs">Professional Tone</Badge>
+                {isEditing && <Badge variant="secondary" className="text-xs">Fine-tuning Mode</Badge>}
               </div>
               
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => generateResponse()}
-                  disabled={!clientMessage || isGenerating}
-                  className="flex-1"
-                >
-                  <Send className="h-4 w-4 mr-2" />
-                  {isGenerating ? "Generating..." : "Generate Response"}
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  onClick={() => copyToClipboard(generatedResponse)}
-                  disabled={!generatedResponse}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-                
-                <Button
-                  variant="default"
-                  onClick={saveConversation}
-                  disabled={!clientMessage || !generatedResponse}
-                  className="bg-success hover:bg-success/90 text-success-foreground"
-                >
-                  Save
-                </Button>
-              </div>
+              {isEditing ? (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={saveRefinedResponse}
+                    disabled={!editedResponse.trim()}
+                    className="flex-1 bg-success hover:bg-success/90 text-success-foreground"
+                  >
+                    <Save className="h-4 w-4 mr-2" />
+                    Save Refined Response
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={cancelEditing}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  <Button
+                    onClick={() => generateResponse()}
+                    disabled={!clientMessage || isGenerating}
+                    className="flex-1"
+                  >
+                    <Send className="h-4 w-4 mr-2" />
+                    {isGenerating ? "Generating..." : "Generate Response"}
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={startEditing}
+                    disabled={!generatedResponse}
+                    title="Fine-tune this response"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    onClick={() => copyToClipboard(generatedResponse)}
+                    disabled={!generatedResponse}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                  
+                  <Button
+                    variant="default"
+                    onClick={saveConversation}
+                    disabled={!clientMessage || !generatedResponse}
+                    className="bg-success hover:bg-success/90 text-success-foreground"
+                  >
+                    Save
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
           </div>
@@ -462,44 +546,17 @@ const FiverrChatBot = () => {
                             <Copy className="h-3 w-3" />
                           </Button>
                         </div>
-                        
-                         <div className="space-y-2">
-                           {conversation.screenshotUrl && (
-                             <div>
-                               <p className="text-xs font-medium text-muted-foreground mb-1">Screenshot:</p>
-                               <img 
-                                 src={conversation.screenshotUrl} 
-                                 alt="Conversation screenshot" 
-                                 className="w-full h-16 object-cover rounded border"
-                               />
-                             </div>
-                           )}
-                           
-                           <div>
-                             <p className="text-xs font-medium text-muted-foreground mb-1">Client:</p>
-                             <p className="text-xs bg-muted p-2 rounded text-muted-foreground line-clamp-2">
-                               {conversation.clientMessage}
-                             </p>
-                           </div>
-                           
-                            <div>
-                              <p className="text-xs font-medium text-muted-foreground mb-1">Response:</p>
-                              <div className="text-xs bg-primary/5 p-2 rounded line-clamp-3 prose prose-xs max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                                  {conversation.generatedResponse}
-                                </ReactMarkdown>
-                              </div>
-                            </div>
-                         </div>
+                        <div className="text-xs text-muted-foreground line-clamp-2">
+                          <strong>Client:</strong> {conversation.clientMessage.substring(0, 80)}...
+                        </div>
+                        <div className="text-xs line-clamp-3">
+                          <strong>Response:</strong> {conversation.generatedResponse.substring(0, 120)}...
+                        </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No conversations yet</p>
-                    <p className="text-xs mt-1">Your chat history will appear here</p>
-                  </div>
+                  <p className="text-muted-foreground text-sm">No conversations yet</p>
                 )}
               </CardContent>
             </Card>

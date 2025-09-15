@@ -25,7 +25,7 @@ serve(async (req) => {
       userContext = {}
     } = await req.json();
 
-    console.log('Processing request with Gemini API');
+    console.log('Processing request with Gemini API and refined response context');
 
     // Get user info from JWT
     const authHeader = req.headers.get('Authorization');
@@ -40,16 +40,25 @@ serve(async (req) => {
       throw new Error('Invalid user token');
     }
 
-    // Get user's templates and conversation history for enhanced AI matching
-    const [templatesRes, conversationsRes, profileRes] = await Promise.all([
+    // Get user's templates, conversation history, and refined responses for enhanced AI context
+    const [templatesRes, conversationsRes, profileRes, refinedResponsesRes] = await Promise.all([
       supabase.from('message_templates').select('*').eq('user_id', user.id).order('usage_count', { ascending: false }),
       supabase.from('conversations').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10),
-      supabase.from('profiles').select('*').eq('user_id', user.id).single()
+      supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+      supabase.rpc('find_similar_refined_responses', {
+        user_id_param: user.id,
+        client_message_param: clientMessage,
+        message_type_param: messageType,
+        similarity_limit: 2
+      })
     ]);
 
     const templates = templatesRes.data || [];
     const recentConversations = conversationsRes.data || [];
     const profile = profileRes.data;
+    const similarRefinedResponses = refinedResponsesRes.data || [];
+
+    console.log(`Found ${similarRefinedResponses.length} similar refined responses for context`);
 
     // Find best matching templates using AI scoring
     const templateMatches = await Promise.all(
@@ -72,8 +81,8 @@ serve(async (req) => {
       .sort((a, b) => b.score - a.score)
       .slice(0, 3);
 
-    // Build context-aware prompt
-    const systemPrompt = `You are a professional Fiverr assistant helping to craft responses to client messages. 
+    // Build enhanced context-aware prompt with refined response examples
+    let systemPrompt = `You are a professional Fiverr assistant helping to craft responses to client messages. 
 
 FIVERR CONTEXT:
 - You're helping a freelancer respond to clients professionally
@@ -87,6 +96,21 @@ USER CONTEXT:
 
 MESSAGE TYPE: ${messageType}
 
+REFINED RESPONSE EXAMPLES (Learn from these successful refined responses):
+${similarRefinedResponses.length > 0 ? 
+  similarRefinedResponses.map((resp, idx) => 
+    `Example ${idx + 1} (Similarity: ${(resp.similarity_score * 100).toFixed(0)}%):
+    Client Query: "${resp.original_client_message.substring(0, 100)}..."
+    Refined Response: "${resp.refined_response.substring(0, 300)}..."
+    
+    `
+  ).join('\n') : 
+  'No similar refined responses available - generate based on general guidelines.'}
+
+IMPORTANT: ${similarRefinedResponses.length > 0 ? 
+  'Use the refined response examples above as your primary style and formatting reference. These represent the user\'s preferred communication style for similar situations. Match their tone, structure, and approach.' : 
+  'Generate a response following standard professional guidelines.'}
+
 GUIDELINES:
 1. Be professional but warm and approachable
 2. Address client concerns directly
@@ -94,10 +118,15 @@ GUIDELINES:
 4. Suggest next steps when appropriate
 5. Keep responses concise but complete
 6. Use a confident, expert tone
+${similarRefinedResponses.length > 0 ? 
+  '7. PRIORITY: Match the style and formatting patterns from the refined response examples above' : 
+  '7. Follow standard professional communication practices'}
 
 ${screenshotUrl ? 'NOTE: The client has shared a screenshot - acknowledge this and reference it appropriately in your response.' : ''}
 
 Generate a professional response to this client message: "${clientMessage}"`;
+
+    console.log('Calling Gemini API with enhanced context');
 
     // Call Google Gemini API
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
@@ -126,14 +155,16 @@ Generate a professional response to this client message: "${clientMessage}"`;
     const geminiData = await geminiResponse.json();
     const generatedResponse = geminiData.candidates[0].content.parts[0].text;
 
-    console.log('Generated response successfully');
+    console.log('Generated response successfully with refined context');
 
     return new Response(JSON.stringify({ 
       generatedResponse,
       messageType,
       context: {
         templatesUsed: templates.length,
-        conversationHistory: recentConversations.length
+        conversationHistory: recentConversations.length,
+        similarRefinedResponses: similarRefinedResponses.length,
+        refinedResponseInfluence: similarRefinedResponses.length > 0
       }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

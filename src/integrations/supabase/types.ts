@@ -179,6 +179,42 @@ export type Database = {
         }
         Relationships: []
       }
+      refined_responses: {
+        Row: {
+          created_at: string
+          id: string
+          message_type: string | null
+          original_client_message: string
+          original_response: string
+          refined_response: string
+          similarity_keywords: string[] | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message_type?: string | null
+          original_client_message: string
+          original_response: string
+          refined_response: string
+          similarity_keywords?: string[] | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message_type?: string | null
+          original_client_message?: string
+          original_response?: string
+          refined_response?: string
+          similarity_keywords?: string[] | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       template_analytics: {
         Row: {
           client_message_context: string | null
@@ -274,6 +310,20 @@ export type Database = {
           template_id: string
         }
         Returns: number
+      }
+      find_similar_refined_responses: {
+        Args: {
+          client_message_param: string
+          message_type_param?: string
+          similarity_limit?: number
+          user_id_param: string
+        }
+        Returns: {
+          id: string
+          original_client_message: string
+          refined_response: string
+          similarity_score: number
+        }[]
       }
       update_template_usage: {
         Args: { template_id: string }
